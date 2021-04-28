@@ -18,6 +18,7 @@ class PingExtension(RemoteBasePlugin):
         )
         self.executions = 0
         self.failures_detected = 0
+        self.last_execution_counter_time = 0
 
 
     def build_proxy_url(self):
@@ -52,6 +53,8 @@ class PingExtension(RemoteBasePlugin):
         frequency = int(self.config.get("frequency")) if self.config.get("frequency") else 15
 
         if self.executions % frequency == 0:
+            self.last_execution_counter_time = self.executions;
+
             ping_result = ping(target)
             log.info(ping_result.as_dict())
 
@@ -90,8 +93,17 @@ class PingExtension(RemoteBasePlugin):
                 state="open" if not success else "resolved",
                 event_type=SYNTHETIC_EVENT_TYPE_OUTAGE,
                 reason=f"Ping failed for {step_title}. Result: {str(ping_result.as_dict())}",
-                engine_name="Ping",
+                engine_name="Ping"
             )
+            
+        # Refresh an open event every 10 minutes so that it does not timeout after 15 minutes
+        elif self.last_execution_counter_time + 10 < self.executions:
+            self.dt_client.third_part_synthetic_tests.refresh_last_open_thirdparty_synthetic_test_event(
+                test_id=self.activation.entity_id,
+                engine_name="Ping",
+                timestamp=datetime.now()
+            )
+
                 
         self.executions += 1
 
